@@ -1,7 +1,4 @@
-
-
-
-### Benchmarks
+##### Benchmarks
 ```
 Setup: 7 hello world node.js servers
 
@@ -15,3 +12,5 @@ $  wrk http://localhost:3000/users/`
 >  Requests/sec:  12250.95
 >  Transfer/sec:      1.58MB
 ```
+
+

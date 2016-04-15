@@ -12,7 +12,9 @@
       <root url="file://$PROJECT_DIR$/../../../gopkg.in/bsm/ratelimit.v1/.git" />
       <root url="file://$PROJECT_DIR$/../../lib/pq/.git" />
       <root url="file://$PROJECT_DIR$/../../../gopkg.in/redis.v3/testdata" />
+      <root url="file://$PROJECT_DIR$/.git" />
       <root url="file://$PROJECT_DIR$/../../boltdb/bolt/.git" />
+      <root url="file://$PROJECT_DIR$/../../dgrijalva/jwt-go/.git" />
       <root url="file://$PROJECT_DIR$/../../../gopkg.in/redis.v3/.git" />
       <root url="file://$PROJECT_DIR$" />
       <root url="file://$PROJECT_DIR$/../gdb/.idea" />
