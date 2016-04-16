@@ -14,25 +14,26 @@ type ProxyServer struct {
 	binds		string
 	workers		int32
 	port		int32
+	accessLog	bool
 	handlers 	map[string] *Handler
 	middleware	map[string] BaseMiddleware
 }
 
-func (proxy ProxyServer) match(req *http.Request) (Handler, bool) {
+func (proxy ProxyServer) match(req *http.Request) (*Handler, bool) {
 	key := strings.Split(req.URL.Path, "/")[1]
 	if handler, ok := proxy.handlers[key]; ok {
-		return *handler, true
+		return handler, true
 	} else {
 		for _, handler := range proxy.handlers {
 			if handler.regex != "" {
 				if match, _ := regexp.MatchString(handler.regex, "peach"); match {
-					return *handler, true
+					return handler, true
 				}
 			}
 		}
 	}
 
-	return Handler{}, false
+	return &Handler{}, false
 }
 
 func (proxy ProxyServer) handle(writer http.ResponseWriter, req *http.Request) {
@@ -40,7 +41,7 @@ func (proxy ProxyServer) handle(writer http.ResponseWriter, req *http.Request) {
 
 	ctx := &Context{
 		writer: writer,
-		handler: handler,
+		handler: *handler,
 		req: req,
 		finished: false,
 		allowProxy: true,
@@ -50,22 +51,30 @@ func (proxy ProxyServer) handle(writer http.ResponseWriter, req *http.Request) {
 		if host, ok := handler.next(ctx); ok {
 			ctx.host = host
 			if proxy.run(handler, ctx) {
-				log.Printf("proxying %s to %s", req.URL.Path, host.target)
+				if proxy.accessLog {
+					log.Printf("[proxying]     PROXIED %s to %s", req.URL.Path, host.target)
+				}
 				host.proxy.ServeHTTP(writer, req)
 			} else {
-				log.Printf("halted proxy %s with %s", req.URL.Path, ctx.writer)
+				if proxy.accessLog {
+					log.Printf("[proxying]     HALTED  %s with %s", req.URL.Path, ctx.writer)
+				}
 			}
 		} else {
 			ctx.NoneAvailable()
-			log.Printf("failed to find host for %s", req.URL.Path)
+			if proxy.accessLog {
+				log.Printf("[proxying]     FAILED no host for %s handler: %s", req.URL.Path, ctx.handler.path)
+			}
 		}
 	} else {
 		ctx.NotFound()
-		log.Printf("failed to find handler for %s", req.URL.Path)
+		if proxy.accessLog {
+			log.Printf("[proxying]     FAILED no handler for %s", req.URL.Path)
+		}
 	}
 }
 
-func (proxy ProxyServer) run(handler Handler, ctx *Context) bool {
+func (proxy ProxyServer) run(handler *Handler, ctx *Context) bool {
 	for _, middleKey := range handler.middleware {
 		if _, ok := proxy.middleware[middleKey]; ok {
 			proxy.middleware[middleKey](ctx)
@@ -100,7 +109,7 @@ func (proxy ProxyServer) Add(config map[string] interface{}) error {
 			path: key,
 			regex: config["regex"].(string),
 			hosts: make([]*Host, 0),
-			lastHost: 0,
+			nextHost: 0,
 			available: true,
 		}
 
@@ -123,6 +132,7 @@ func NewProxyServer() *ProxyServer {
 		binds: "0.0.0.0",
 		port: 3000,
 		workers: 10,
+		accessLog: true,
 		handlers: make(map[string] *Handler, 0),
 		middleware: make(map[string] BaseMiddleware, 0),
 	}

@@ -4,7 +4,7 @@ import "github.com/coldog/proxy/proxy"
 
 func main() {
 	config := map[string] interface{} {
-		"ip_hash": true,
+		"ip_hash": false,
 		"path": "test",
 		"middleware": []string{},
 		"regex": "(.*)",

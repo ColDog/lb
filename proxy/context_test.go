@@ -37,7 +37,7 @@ func TestName(t *testing.T) {
 		t.Fail()
 	}
 
-	ctx.finish()
+	ctx.Finish()
 
 	if ctx.allowProxy == true {
 		t.Fail()
