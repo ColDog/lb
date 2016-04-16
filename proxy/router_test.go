@@ -13,7 +13,7 @@ func TestRouting(t *testing.T) {
 	router.Add("/users/:id/thing", "h2")
 	router.Add("/testing/*", "h3")
 
-	res1, _ := router.Match("/testing/123")
+	res1, _ := router.Match("/testing/123?name=coldog")
 	if res1 != "h3" {
 		t.Fatal("Failed to match /testing/123 to /testing/*")
 	}
@@ -32,8 +32,6 @@ func TestRouting(t *testing.T) {
 	if res4 != "fail" {
 		t.Fatal("Failed to return default handler")
 	}
-
-
 
 	spew.Println(router.base)
 }
