@@ -77,6 +77,7 @@ func clean(path string) []string {
 	path = strings.Replace(path, "//", "/", -1);
 	path = strings.Replace(path, "///", "/", -1);
 	path = strings.Replace(path, "////", "/", -1);
+	path = strings.Split(path, "?")[0]
 	if path[0] == '/' {
 		path = strings.TrimPrefix(path, "/")
 	}

@@ -18,8 +18,8 @@ func TestRouting(t *testing.T) {
 		t.Fatal("Failed to match /testing/123 to /testing/*")
 	}
 
-	res2, _ := router.Match("/users/123/thing")
-	if res2 != "h2" {
+	res2, params := router.Match("/users/123/thing?name=colin")
+	if res2 != "h2" || params[":id"] != "123" {
 		t.Fatal("Failed to match /users/123/thing to /users/:id/thing")
 	}
 
