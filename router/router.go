@@ -1,10 +1,10 @@
-package proxy
+package router
 
 import (
 	"strings"
 )
 
-type tree struct {
+type RouteTree struct {
 	base 		*node
 	notFound 	string
 }
@@ -16,7 +16,7 @@ type node struct {
 	children 	map[string] *node
 }
 
-func (tree *tree) Match(path string) (string, map[string] string) {
+func (tree *RouteTree) Match(path string) (string, map[string] string) {
 	paths := clean(path)
 	params := make(map[string] string)
 
@@ -38,11 +38,11 @@ func (tree *tree) Match(path string) (string, map[string] string) {
 	return current.handler, params
 }
 
-func (tree *tree) Default(handler string) {
+func (tree *RouteTree) Default(handler string) {
 	tree.notFound = handler
 }
 
-func (tree *tree) Add(path string, handler string) {
+func (tree *RouteTree) Add(path string, handler string) {
 	paths := clean(path)
 
 	current := tree.base
@@ -84,8 +84,9 @@ func clean(path string) []string {
 	return strings.Split(path, "/")
 }
 
-func Router() *tree {
-	return &tree{
+func Router() *RouteTree {
+	return &RouteTree{
 		base: &node{children: make(map[string] *node)},
 	}
 }
+

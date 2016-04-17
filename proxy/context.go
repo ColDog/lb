@@ -24,15 +24,16 @@ type Context struct {
 	finished	bool
 	allowProxy	bool
 	written 	bool
-	writer 		http.ResponseWriter
-	handler 	Handler
-	req 		*http.Request
-	host		*Host
+	Params 		map[string] string
+	Writer 		http.ResponseWriter
+	Handler 	Handler
+	Req 		*http.Request
+	Host		*Host
 }
 
-func (ctx *Context) clientIp() (string, bool) {
+func (ctx *Context) ClientIp() (string, bool) {
 	for _, header := range IpHeaders {
-		if ip, ok := ctx.req.Header[header]; ok && len(ip) >= 1 && strings.ToLower(ip[0]) != "unknown" && ip[0] != "" {
+		if ip, ok := ctx.Req.Header[header]; ok && len(ip) >= 1 && strings.ToLower(ip[0]) != "unknown" && ip[0] != "" {
 			return ip[0], true
 		}
 	}
@@ -63,7 +64,7 @@ func (ctx *Context) NoneAvailable() {
 
 func (ctx *Context) WithStatus(status int) {
 	result := fmt.Sprintf(`{"error": true, "code": %d, "message": "%s"}`, status, http.StatusText(status))
-	ctx.writer.WriteHeader(status)
+	ctx.Writer.WriteHeader(status)
 	ctx.Write(result)
 	ctx.AsJson()
 	ctx.Finish()
@@ -71,11 +72,11 @@ func (ctx *Context) WithStatus(status int) {
 
 func (ctx *Context) Write(body string) {
 	ctx.written = true
-	ctx.writer.Write([]byte(body))
+	ctx.Writer.Write([]byte(body))
 }
 
 func (ctx *Context) SetHeader(key, value string) {
-	ctx.writer.Header().Add(key, value)
+	ctx.Writer.Header().Add(key, value)
 }
 
 func (ctx *Context) AsJson() {

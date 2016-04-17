@@ -5,9 +5,9 @@ import "testing"
 func TestSimple(t *testing.T) {
 	config := map[string] interface{} {
 		"ip_hash": true,
-		"path": "test",
+		"routes": []string{"test"},
+		"key": "test",
 		"middleware": []string{"json"},
-		"regex": "(.*)",
 		"hosts": []map[string] interface{} {
 			map[string] interface{} {"target": "http://localhost:3000", "health": "http://localhost:3001"},
 		},

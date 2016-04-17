@@ -8,9 +8,9 @@ import (
 func TestHandler(t *testing.T) {
 	config := map[string] interface{} {
 		"ip_hash": true,
-		"path": "test",
+		"key": "test",
+		"routes": []string{},
 		"middleware": []string{"json"},
-		"regex": "(.*)",
 		"hosts": []map[string] interface{} {
 			map[string] interface{} {"target": "http://localhost:3000", "health": "http://localhost:3001"},
 		},
@@ -21,13 +21,13 @@ func TestHandler(t *testing.T) {
 	proxy.Add(config)
 
 	ctx := &Context{
-		writer: MockWriter{},
-		req: &http.Request{},
+		Writer: MockWriter{},
+		Req: &http.Request{},
 		finished: false,
 		allowProxy: true,
 	}
 
-	host, ok := proxy.handlers["test"].next(ctx)
+	host, ok := proxy.handlers["test"].Next(ctx)
 	if !ok {
 		t.Fail()
 	}

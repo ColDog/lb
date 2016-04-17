@@ -1,13 +1,18 @@
 package main
 
-import "github.com/coldog/proxy/proxy"
+import (
+	"github.com/coldog/proxy/proxy"
+)
 
 func main() {
 	config := map[string] interface{} {
+		"key": "test",
 		"ip_hash": false,
-		"path": "test",
+		"routes": []string{
+			"/test",
+			"/test/*",
+		},
 		"middleware": []string{},
-		"regex": "(.*)",
 		"hosts": []map[string] interface{} {
 			map[string] interface{} {"target": "http://localhost:8000", "health": "http://localhost:8000/check"},
 			map[string] interface{} {"target": "http://localhost:8001", "health": "http://localhost:8001/check"},
@@ -16,9 +21,14 @@ func main() {
 		},
 	}
 
-	proxy := proxy.NewProxyServer()
+	proxy := proxy.NewProxyServer(map[string] interface{} {
+		"binds": "0.0.0.0",
+		"port": 3000,
+		"access_log": true,
+	})
 
 	proxy.Add(config)
 
+	proxy.BuildRoutes()
 	proxy.Start()
 }

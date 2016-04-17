@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"hash/fnv"
 	"errors"
+	"github.com/coldog/proxy/tools"
 )
 
 type Host struct {
@@ -28,8 +29,8 @@ func (host *Host) ping() {
 
 type Handler struct {
 	ip_hash 	bool
-	regex  		string
- 	path 		string
+ 	routes 		[]string
+	key 		string
 	hosts		[]*Host
 	middleware	[]string
 	available	bool
@@ -38,20 +39,19 @@ type Handler struct {
 }
 
 
-func (handler *Handler) update(config map[string] interface{}) {
-	handler.middleware = config["middleware"].([]string)
-	handler.ip_hash = config["ip_hash"].(bool)
-	handler.middleware = config["middleware"].([]string)
-	handler.regex = config["regex"].(string)
+func (handler *Handler) Update(config tools.Map) {
+	handler.middleware = config.StrArray("middleware")
+	handler.ip_hash = config.Bool("ip_hash")
+	handler.routes = config.StrArray("routes")
 
-	for _, host := range config["hosts"].([]map[string] interface{}) {
-		if !handler.hasHost(host["target"].(string)) {
-			handler.add(host)
+	for _, host := range config.MapArray("hosts") {
+		if !handler.HasHost(host.Str("target")) {
+			handler.AddHost(host)
 		}
 	}
 }
 
-func (handler *Handler) hasHost(url string) bool {
+func (handler *Handler) HasHost(url string) bool {
 	for _, host := range handler.hosts {
 		if host.target == url {
 			return true
@@ -78,7 +78,7 @@ func (handler *Handler) getHealthyHosts() []int {
 	return handler.healthyHosts
 }
 
-func (handler *Handler) next(ctx *Context) (*Host, bool) {
+func (handler *Handler) Next(ctx *Context) (*Host, bool) {
 	idx := handler.nextHost
 	if idx >= len(handler.hosts) {
 		idx = 0
@@ -100,7 +100,7 @@ func (handler *Handler) next(ctx *Context) (*Host, bool) {
 	}
 
 	if handler.ip_hash {
-		ip, ok := ctx.clientIp()
+		ip, ok := ctx.ClientIp()
 		if ok {
 			// build a map of the result to the healthy hosts
 			h := fnv.New64a()
@@ -139,22 +139,21 @@ func (handler *Handler) next(ctx *Context) (*Host, bool) {
 		return handler.hosts[idx], true
 	}
 
-	log.Printf("[handler]      %s failed to find a suitable host", handler.path)
+	log.Printf("[handler]      %s failed to find a suitable host", handler.key)
 	return &Host{}, false
 }
 
-func (handler *Handler) add(config map[string] interface{}) error {
-	if handler.hasHost(config["target"].(string)) {
-		log.Println("already has host")
+func (handler *Handler) AddHost(config tools.Config) error {
+	if handler.HasHost(config.Str("target")) {
 		return errors.New("Already has that host")
 	}
 
-	dest, _ := url.Parse(config["target"].(string))
+	dest, _ := url.Parse(config.Str("target"))
 	proxy := httputil.NewSingleHostReverseProxy(dest)
 
 	hostStruct := &Host{
-		health: config["health"].(string),
-		target: config["target"].(string),
+		health: config.Str("health"),
+		target: config.Str("target"),
 		checked: 0,
 		healthy: true,
 		proxy: proxy,
@@ -181,8 +180,12 @@ func (handler *Handler) StartHealthCheck() {
 			handler.healthyHosts = healthy
 			handler.available = available
 
-			log.Printf("[healthcheck]  %s available: %t, healthy list: %d, up percent: %f", handler.path, handler.IsAvailable(), handler.getHealthyHosts(), handler.Status())
-
+			tools.Log("healthcheck", map[string] interface{} {
+				"key": "proxy.healthcheck",
+				"available": handler.IsAvailable(),
+				"healthy_hosts": handler.getHealthyHosts(),
+				"status": handler.Status(),
+			})
 			time.Sleep(15 * time.Second)
 		}
 	}()

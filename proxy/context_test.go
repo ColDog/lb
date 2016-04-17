@@ -27,8 +27,8 @@ func (w MockWriter) Write(body []byte) (int, error) {
 
 func TestName(t *testing.T) {
 	ctx := &Context{
-		writer: MockWriter{},
-		req: &http.Request{},
+		Writer: MockWriter{},
+		Req: &http.Request{},
 		finished: false,
 		allowProxy: true,
 	}

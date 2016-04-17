@@ -13,4 +13,3 @@ $  wrk http://localhost:3000/users/`
 >  Transfer/sec:      1.58MB
 ```
 
-
