@@ -3,10 +3,11 @@ package proxy
 import (
 	"testing"
 	"net/http"
+	"github.com/coldog/proxy/tools"
 )
 
 func TestHandler(t *testing.T) {
-	config := map[string] interface{} {
+	config := tools.NewMap(map[string] interface{} {
 		"ip_hash": true,
 		"key": "test",
 		"routes": []string{},
@@ -14,11 +15,11 @@ func TestHandler(t *testing.T) {
 		"hosts": []map[string] interface{} {
 			map[string] interface{} {"target": "http://localhost:3000", "health": "http://localhost:3001"},
 		},
-	}
+	})
 
 	proxy := ProxyServer{handlers: make(map[string] *Handler, 0)}
 
-	proxy.Add(config)
+	proxy.Update(config)
 
 	ctx := &Context{
 		Writer: MockWriter{},

@@ -3,28 +3,81 @@ package proxy
 import (
 	"net/http"
 	"time"
-	"log"
 	"net/url"
 	"net/http/httputil"
 	"hash/fnv"
-	"errors"
 	"github.com/coldog/proxy/tools"
 )
+
+// The data structure and methods for handlers and hosts.
+// handlers have a list of hosts that can respond to requests, as well as a list of middleware that the handler should
+// step through for each request. Handlers are mutable, hosts are immutable. Configuration is best handled by increasing
+// versions of a json file, where a handler is defined solely by a single json file. This can be mapped to the 'key' in
+// the handler struct.
+//
+// Example configuration:
+// {
+//	"key": "test",
+//	"ip_hash": false,
+//	"routes": [
+// 		"/test",
+// 		"/test/*"
+// 	],
+//	"middleware": [
+// 		"JwtAuth"
+// 	],
+//	"hosts": [
+//		{
+// 			"target": "http://localhost:8000",
+// 			"health": "http://localhost:8000/health",
+//			"timeout": 10,
+//			"down": false
+// 		}
+// 	]
+// }
+//
+// The handler Update method, would handle this json structure to update the handler accordingly. It would create a new
+// set of hosts and add them to the list of hosts and update the other configuration. The handler struct is threadsafe which
+// allows concurrent updates.
 
 type Host struct {
 	target		string
 	health		string
+	timeout 	int
+	down 		bool
 	proxy 		http.Handler
 	checked		int64
 	healthy		bool
 }
 
+// Checks whether this host is down and marked as healthy by the healthchecker.
+func (host *Host) available() bool {
+	return host.healthy && !host.down
+}
+
+// Pings to mark the host as healthy or not.
 func (host *Host) ping() {
-	timeout := time.Duration(5 * time.Second)
+	if host.timeout < 5 {
+		host.timeout = 5
+	}
+	timeout := time.Duration(time.Duration(host.timeout) * time.Second)
 	client := http.Client{Timeout: timeout}
 	resp, err := client.Get(host.health)
 	host.healthy = err == nil && resp.StatusCode == 200
 	host.checked = time.Now().Unix()
+}
+
+// Create a new default handler. Only takes key as an argument. Use the update method on this new handler to configure.
+func NewHandler(key string) *Handler {
+	handler := &Handler{
+		key: key,
+		middleware: make([]string, 0),
+		hosts: make([]*Host, 0),
+		nextHost: 0,
+		available: true,
+	}
+	handler.StartHealthCheck()
+	return handler
 }
 
 type Handler struct {
@@ -34,42 +87,22 @@ type Handler struct {
 	hosts		[]*Host
 	middleware	[]string
 	available	bool
+	down 		bool
 	nextHost	int
 	healthyHosts    []int
 }
 
-
-func (handler *Handler) Update(config tools.Map) {
-	handler.middleware = config.StrArray("middleware")
-	handler.ip_hash = config.Bool("ip_hash")
-	handler.routes = config.StrArray("routes")
-
-	for _, host := range config.MapArray("hosts") {
-		if !handler.HasHost(host.Str("target")) {
-			handler.AddHost(host)
-		}
-	}
-}
-
-func (handler *Handler) HasHost(url string) bool {
-	for _, host := range handler.hosts {
-		if host.target == url {
-			return true
-		}
-	}
-
-	return false
-}
-
+// Returns the percentage of available hosts for a given handler.
 func (handler *Handler) Status() float64 {
-	return  float64(len(handler.getHealthyHosts())) / float64(len(handler.hosts))
+	return  float64(len(handler.GetAvailableHosts())) / float64(len(handler.hosts))
 }
 
-func (handler *Handler) getHealthyHosts() []int {
+// Get a list of the available hosts. Returns the indices.
+func (handler *Handler) GetAvailableHosts() []int {
 	if handler.healthyHosts == nil {
 		handler.healthyHosts = make([]int, 0)
 		for idx, host := range handler.hosts {
-			if host.healthy {
+			if host.available() {
 				handler.healthyHosts = append(handler.healthyHosts, idx)
 			}
 		}
@@ -78,6 +111,9 @@ func (handler *Handler) getHealthyHosts() []int {
 	return handler.healthyHosts
 }
 
+// This is the load balancing method. It returns the host to be used for a given request as well as an 'ok' flag to let
+// you know if it could find any available hosts. The reverse proxy should return 503 if false is retuned as the second
+// argument.
 func (handler *Handler) Next(ctx *Context) (*Host, bool) {
 	idx := handler.nextHost
 	if idx >= len(handler.hosts) {
@@ -93,15 +129,15 @@ func (handler *Handler) Next(ctx *Context) (*Host, bool) {
 		return handler.hosts[0], true
 	}
 
-	healthy := handler.getHealthyHosts()
+	healthy := handler.GetAvailableHosts()
 	if len(healthy) == 1 {
 		handler.nextHost = healthy[0]
 		return handler.hosts[handler.nextHost], true
 	}
 
 	if handler.ip_hash {
-		ip, ok := ctx.ClientIp()
-		if ok {
+		ip := ctx.ClientIp()
+		if ip != "" && ip != "unknown" {
 			// build a map of the result to the healthy hosts
 			h := fnv.New64a()
 			h.Write([]byte(ip))
@@ -115,7 +151,7 @@ func (handler *Handler) Next(ctx *Context) (*Host, bool) {
 			}
 
 			handler.nextHost = int(b)
-			if handler.hosts[int(b)].healthy {
+			if handler.hosts[int(b)].available() {
 				return handler.hosts[int(b)], true
 			}
 		}
@@ -124,11 +160,11 @@ func (handler *Handler) Next(ctx *Context) (*Host, bool) {
 	if len(handler.hosts) > 1 {
 
 		for ; idx < len(handler.hosts); {
-			if !handler.hosts[idx].healthy {
+			if !handler.hosts[idx].available() {
 				idx++
 			}
 
-			if handler.hosts[idx].healthy {
+			if handler.hosts[idx].available() {
 				break
 			}
 
@@ -139,30 +175,29 @@ func (handler *Handler) Next(ctx *Context) (*Host, bool) {
 		return handler.hosts[idx], true
 	}
 
-	log.Printf("[handler]      %s failed to find a suitable host", handler.key)
+	tools.Log("handler", map[string] interface{} {
+		"event": "proxy.next_host",
+		"status": "no_hosts_available",
+		"handler": handler.key,
+	})
 	return &Host{}, false
 }
 
-func (handler *Handler) AddHost(config tools.Config) error {
-	if handler.HasHost(config.Str("target")) {
-		return errors.New("Already has that host")
+// steps through the middleware for a given proxy server for this handler.
+func (handler *Handler) run(proxy ProxyServer, ctx *Context) bool {
+	for _, middleKey := range handler.middleware {
+		if _, ok := proxy.middleware[middleKey]; ok {
+			proxy.middleware[middleKey](ctx)
+			if ctx.finished {
+				break
+			}
+		}
 	}
 
-	dest, _ := url.Parse(config.Str("target"))
-	proxy := httputil.NewSingleHostReverseProxy(dest)
-
-	hostStruct := &Host{
-		health: config.Str("health"),
-		target: config.Str("target"),
-		checked: 0,
-		healthy: true,
-		proxy: proxy,
-	}
-
-	handler.hosts = append(handler.hosts, hostStruct)
-	return nil
+	return ctx.allowProxy
 }
 
+// starts the health check loop.
 func (handler *Handler) StartHealthCheck() {
 	go func() {
 		for  {
@@ -171,7 +206,7 @@ func (handler *Handler) StartHealthCheck() {
 			healthy := make([]int, 0)
 			for idx, host := range handler.hosts {
 				host.ping()
-				if host.healthy {
+				if host.available() {
 					healthy = append(healthy, idx)
 					available = true
 				}
@@ -183,7 +218,7 @@ func (handler *Handler) StartHealthCheck() {
 			tools.Log("healthcheck", map[string] interface{} {
 				"key": "proxy.healthcheck",
 				"available": handler.IsAvailable(),
-				"healthy_hosts": handler.getHealthyHosts(),
+				"healthy_hosts": handler.GetAvailableHosts(),
 				"status": handler.Status(),
 			})
 			time.Sleep(15 * time.Second)
@@ -191,14 +226,48 @@ func (handler *Handler) StartHealthCheck() {
 	}()
 }
 
-func (handler *Handler) MarkUnvailable() {
-	handler.available = false
+// Updates the handler with the latest configuration. Uses a wrapped Map from the tools package. This just handles some
+// of the more tedious type checking. With a json structure, it can be instantiated with:
+// 	handler.Update(tools.Map{json: []bytes(`{"x": "y"}`)
+// Concurrency is handled by readers making sure that they
+func (handler *Handler) Update(config tools.Map) {
+	handler.middleware = config.StrArray("middleware")
+	handler.ip_hash = config.Bool("ip_hash")
+	handler.routes = config.StrArray("routes")
+
+	newHosts := make([]*Host, 0)
+	for _, host := range config.MapArray("hosts") {
+
+		dest, _ := url.Parse(host.Str("target"))
+		proxy := httputil.NewSingleHostReverseProxy(dest)
+
+		hostStruct := &Host{
+			health: host.Str("health"),
+			target: host.Str("target"),
+			timeout: host.Int("timeout"),
+			down: host.Bool("down"),
+			checked: 0,
+			healthy: true,
+			proxy: proxy,
+		}
+
+		newHosts = append(newHosts, hostStruct)
+	}
+
+	handler.hosts = newHosts
 }
 
-func (handler *Handler) MarkAvailable() {
-	handler.available = true
+// Marks the current handler as down
+func (handler *Handler) MarkDown() {
+	handler.down = true
 }
 
+// Marks the current handler as up
+func (handler *Handler) MarkUp() {
+	handler.down = false
+}
+
+// Checks if not down and is marked available by the health check loop.
 func (handler *Handler) IsAvailable() bool {
-	return handler.available
+	return handler.available && !handler.down
 }

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"encoding/json"
-	"fmt"
 )
 
 // a general purpose map data structure that is polymorphic. Used for configuration and in http body requests.
@@ -13,9 +12,7 @@ type Map struct {
 
 
 func (obj *Map) before() {
-	fmt.Println("checking json")
 	if obj.json != nil {
-		fmt.Println("parsing json")
 		if err := json.Unmarshal(obj.json, &obj.data); err != nil {
 			panic(err)
 		}
@@ -179,4 +176,12 @@ func (obj *Map) Extend(newMap map[string] interface{}) {
 
 func (obj *Map) ToJson(key string, val interface{}) {
 	obj.before()
+}
+
+func NewMap(data map[string] interface{}) Map {
+	return Map{data: data}
+}
+
+func NewMapFromJson(data []byte) Map {
+	return Map{json: data}
 }

@@ -11,6 +11,17 @@ import (
 
 type BaseMiddleware func(ctx *Context) *Context
 
+func NewProxyServer(config tools.Map) *ProxyServer {
+	return &ProxyServer{
+		binds: config.Str("binds"),
+		port: config.Int32("port"),
+		accessLog: config.Bool("access_log"),
+		router: router.Router(),
+		handlers: make(map[string] *Handler, 0),
+		middleware: make(map[string] BaseMiddleware, 0),
+	}
+}
+
 type ProxyServer struct {
 	binds		string
 	port		int32
@@ -45,8 +56,8 @@ func (proxy ProxyServer) handle(writer http.ResponseWriter, req *http.Request) {
 
 	if ok {
 		if host, ok := handler.Next(ctx); ok {
-			ctx.Host = host
-			if proxy.run(handler, ctx) {
+			ctx.Host = *host
+			if handler.run(proxy, ctx) {
 				status = "success"
 				host.proxy.ServeHTTP(writer, req)
 			} else {
@@ -62,32 +73,18 @@ func (proxy ProxyServer) handle(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	if proxy.accessLog {
-		ip, _ := ctx.ClientIp()
 		tools.Log("proxy.handled", map[string] interface{} {
 			"key": "proxy.proxy",
 			"status": status,
-			"client_ip": ip,
+			"client_ip": ctx.ClientIp(),
 			"handler_availability": handler.IsAvailable(),
-			"handler_healthy_hosts": handler.getHealthyHosts(),
+			"handler_healthy_hosts": handler.GetAvailableHosts(),
 			"handler_status": handler.Status(),
 			"proxied_to": ctx.Host.target,
 			"path": req.URL.Path,
 			"server": fmt.Sprintf("%s:%d", proxy.binds, proxy.port),
 		})
 	}
-}
-
-func (proxy ProxyServer) run(handler *Handler, ctx *Context) bool {
-	for _, middleKey := range handler.middleware {
-		if _, ok := proxy.middleware[middleKey]; ok {
-			proxy.middleware[middleKey](ctx)
-			if ctx.finished {
-				break
-			}
-		}
-	}
-
-	return ctx.allowProxy
 }
 
 func (proxy ProxyServer) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
@@ -101,36 +98,6 @@ func (proxy ProxyServer) Start() {
 
 func (proxy ProxyServer) Use(key string, f BaseMiddleware) {
 	proxy.middleware[key] = f
-}
-
-func (proxy ProxyServer) Add(config tools.Map) error {
-	key := config.Str("key")
-
-	if key == "" {
-		return errors.New("Must specify a key")
-	}
-
-	if _, ok := proxy.handlers[key]; !ok {
-		proxy.handlers[key] = &Handler{
-			key: key,
-			middleware: make([]string, 0),
-			hosts: make([]*Host, 0),
-			nextHost: 0,
-			available: true,
-		}
-
-		proxy.handlers[key].StartHealthCheck()
-	}
-
-	proxy.handlers[key].Update(config)
-	proxy.BuildRoutes()
-	return nil
-}
-
-func (proxy *ProxyServer) Configure(handlers tools.Map) {
-	for _, config := range handlers.MapArray("handlers") {
-		proxy.Add(config)
-	}
 }
 
 func (proxy *ProxyServer) BuildRoutes() {
@@ -150,13 +117,31 @@ func (proxy *ProxyServer) AddDefaultMiddleware() {
 	proxy.Use("IpRateLimiter", IpRateLimiter)
 }
 
-func NewProxyServer(config tools.Map) *ProxyServer {
-	return &ProxyServer{
-		binds: config.Str("binds"),
-		port: config.Int32("port"),
-		accessLog: config.Bool("access_log"),
-		router: router.Router(),
-		handlers: make(map[string] *Handler, 0),
-		middleware: make(map[string] BaseMiddleware, 0),
+func (proxy ProxyServer) Update(config tools.Map) error {
+	key := config.Str("key")
+
+	if key == "" {
+		return errors.New("Must specify a key")
 	}
+
+	if _, ok := proxy.handlers[key]; !ok {
+		proxy.handlers[key] = NewHandler(key)
+	}
+
+	proxy.handlers[key].Update(config)
+	proxy.BuildRoutes()
+	return nil
 }
+
+func (proxy *ProxyServer) UpdateAll(handlers tools.Map) error {
+	if !handlers.Exists("handlers") {
+		return errors.New("Must specify an array of handlers")
+	}
+
+	for _, config := range handlers.MapArray("handlers") {
+		proxy.Update(config)
+	}
+
+	return nil
+}
+

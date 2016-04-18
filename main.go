@@ -1,34 +1,39 @@
 package main
 
 import (
+	"net/http"
 	"github.com/coldog/proxy/proxy"
+	"github.com/coldog/proxy/tools"
+	"flag"
+	"fmt"
 )
 
+type App struct {
+	proxy 	proxy.ProxyServer
+}
+
+func (f *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	w.Write([]byte("Foo"))
+}
+
 func main() {
-	config := map[string] interface{} {
-		"key": "test",
-		"ip_hash": false,
-		"routes": []string{
-			"/test",
-			"/test/*",
-		},
-		"middleware": []string{},
-		"hosts": []map[string] interface{} {
-			map[string] interface{} {"target": "http://localhost:8000", "health": "http://localhost:8000/check"},
-			map[string] interface{} {"target": "http://localhost:8001", "health": "http://localhost:8001/check"},
-			map[string] interface{} {"target": "http://localhost:8002", "health": "http://localhost:8002/check"},
-			map[string] interface{} {"target": "http://localhost:8003", "health": "http://localhost:8003/check"},
-		},
-	}
+	host := flag.String("server-host", "0.0.0.0", "Host to bind to")
+	port := flag.Int("server-port", 8080, "Port to bind to")
 
-	proxy := proxy.NewProxyServer(map[string] interface{} {
-		"binds": "0.0.0.0",
-		"port": 3000,
-		"access_log": true,
-	})
+	proxyHost := flag.String("proxy-host", "0.0.0.0", "Host to bind to")
+	proxyPort := flag.Int("proxy-port", 3000, "Port to bind to")
+	accessLog := flag.Bool("access_log", true, "Access log enabled")
 
-	proxy.Add(config)
+	app := &App{proxy.NewProxyServer(tools.NewMap(map[string] interface{} {
+		"binds": proxyHost,
+		"port": proxyPort,
+		"access_log": accessLog,
+	}))}
 
-	proxy.BuildRoutes()
-	proxy.Start()
+	go func() {
+		app.proxy.BuildRoutes()
+		app.proxy.Start()
+	}()
+
+	http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), app)
 }
