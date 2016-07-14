@@ -7,20 +7,35 @@
     <JAVADOC />
     <SOURCES />
     <excluded>
+      <root url="file://$PROJECT_DIR$/../raft/.idea" />
       <root url="file://$PROJECT_DIR$/../../davecgh/go-spew/.git" />
       <root url="file://$PROJECT_DIR$/../../go-redis/redis/.git" />
-      <root url="file://$PROJECT_DIR$/../../../gopkg.in/bsm/ratelimit.v1/.git" />
+      <root url="file://$PROJECT_DIR$/../kdb/.idea" />
       <root url="file://$PROJECT_DIR$/../../lib/pq/.git" />
-      <root url="file://$PROJECT_DIR$/.git" />
+      <root url="file://$PROJECT_DIR$/../kdb/.git" />
       <root url="file://$PROJECT_DIR$/../../../gopkg.in/redis.v3/.git" />
+      <root url="file://$PROJECT_DIR$/../mq/.idea" />
       <root url="file://$PROJECT_DIR$" />
-      <root url="file://$PROJECT_DIR$/../gdb/.idea" />
       <root url="file://$PROJECT_DIR$/.idea" />
-      <root url="file://$PROJECT_DIR$/../../go-redis/redis/testdata" />
-      <root url="file://$PROJECT_DIR$/../../../gopkg.in/redis.v3/testdata" />
       <root url="file://$PROJECT_DIR$/../../davecgh/go-spew/spew/testdata" />
-      <root url="file://$PROJECT_DIR$/../../boltdb/bolt/.git" />
       <root url="file://$PROJECT_DIR$/../../dgrijalva/jwt-go/.git" />
+      <root url="file://$PROJECT_DIR$/../../hashicorp/yamux/.git" />
+      <root url="file://$PROJECT_DIR$/../../pebbe/zmq4/.git" />
+      <root url="file://$PROJECT_DIR$/../messaging/.git" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/bsm/ratelimit.v1/.git" />
+      <root url="file://$PROJECT_DIR$/.git" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/fatih/pool.v2/.git" />
+      <root url="file://$PROJECT_DIR$/../mq/.git" />
+      <root url="file://$PROJECT_DIR$/../messaging/.idea" />
+      <root url="file://$PROJECT_DIR$/../gdb/.idea" />
+      <root url="file://$PROJECT_DIR$/../../docker/libchan/.git" />
+      <root url="file://$PROJECT_DIR$/../../julienschmidt/httprouter/.git" />
+      <root url="file://$PROJECT_DIR$/../../go-redis/redis/testdata" />
+      <root url="file://$PROJECT_DIR$/../../alecthomas/gozmq/.git" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/redis.v3/testdata" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/vmihailenco/msgpack.v2/.git" />
+      <root url="file://$PROJECT_DIR$/../../boltdb/bolt/.git" />
+      <root url="file://$PROJECT_DIR$/../eb_tx/.idea" />
     </excluded>
   </library>
 </component>

@@ -12,10 +12,6 @@ type App struct {
 	proxy 	proxy.ProxyServer
 }
 
-func (f *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte("Foo"))
-}
-
 func main() {
 	host := flag.String("server-host", "0.0.0.0", "Host to bind to")
 	port := flag.Int("server-port", 8080, "Port to bind to")
