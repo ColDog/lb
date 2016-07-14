@@ -1,4 +1,32 @@
-##### Benchmarks
+# Golang Load Balancer
+
+This is a dynamically configured load balancer. You provide it with a list of routes and hosts, and it will dynamically balance http traffic between the hosts.
+
+### Configuration
+```
+Example configuration:
+{
+"key": "test",
+"ip_hash": false,
+"routes": [
+		"/test",
+		"/test/*"
+	],
+"middleware": [
+		"JwtAuth"
+	],
+"hosts": [
+    {
+			"target": "http://localhost:8000",
+			"health": "http://localhost:8000/health",
+			"timeout": 10,
+			"down": false
+    }
+	]
+}
+```
+
+### Benchmarks
 ```
 Setup: 7 hello world node.js servers
 
