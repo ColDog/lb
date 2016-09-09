@@ -97,7 +97,6 @@ type meteredRoundTripper struct {
 }
 
 func (m *meteredRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	m.t.requests += 1
 
 	t1 := time.Now()
 	resp, err := m.tr.RoundTrip(r)
@@ -105,6 +104,7 @@ func (m *meteredRoundTripper) RoundTrip(r *http.Request) (*http.Response, error)
 	m.stat.SetTime(m.id, t1)
 	m.stat.SetIncrement(m.id + "." + statusCodeName(resp), 1)
 
+	m.t.requests += 1
 	if err != nil || resp.StatusCode >= 500 {
 		m.t.errors += 1
 	}

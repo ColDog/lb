@@ -1,27 +1,30 @@
 package testing
 
 import (
+	"github.com/coldog/proxy/lb/lb"
+	"github.com/coldog/proxy/lb/router"
+
+	"gopkg.in/tylerb/graceful.v1"
+
 	"net/http"
 	"fmt"
 	"testing"
 	"time"
-	"github.com/coldog/proxy/lb/lb"
-	"github.com/coldog/proxy/lb/router"
 	"sync"
+	"io"
+	"io/ioutil"
 )
 
-type serve struct {}
-
-func (s *serve) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello!"))
-	w.WriteHeader(200)
-}
-
 func listen(p int) {
-	http.ListenAndServe(fmt.Sprintf(":%d", p), &serve{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintf(w, "HI!")
+	})
+
+	graceful.Run(fmt.Sprintf(":%d", p), 30*time.Second, mux)
 }
 
-func load(path string, n int, t time.Duration) {
+func load(path string, n int, v time.Duration, t time.Duration) {
 	requests := 0
 	s5xx := 0
 	s4xx := 0
@@ -39,8 +42,12 @@ func load(path string, n int, t time.Duration) {
 			httpClient := &http.Client{}
 
 			for {
+				if v > 0 {
+					time.Sleep(v)
+				}
+
 				t1 := time.Now()
-				resp, _ := httpClient.Get("http://localhost:9888" + path)
+				resp, err := httpClient.Get("http://127.0.0.1:9888" + path)
 				t2 := time.Now()
 
 				times = append(times, t2.UnixNano() - t1.UnixNano())
@@ -48,6 +55,7 @@ func load(path string, n int, t time.Duration) {
 				requests++
 
 				if resp == nil {
+					fmt.Printf("err: %v\n", err)
 					conErr++
 				} else {
 					if resp.StatusCode >= 500 {
@@ -55,6 +63,8 @@ func load(path string, n int, t time.Duration) {
 					} else if resp.StatusCode >= 400 {
 						s4xx++
 					}
+					io.Copy(ioutil.Discard, resp.Body)
+					resp.Body.Close()
 				}
 
 				if start.Add(t).Before(time.Now()) {
@@ -72,6 +82,10 @@ func load(path string, n int, t time.Duration) {
 	fmt.Printf("               4xx %d\n", s4xx)
 	fmt.Printf(" connection errors %d\n", conErr)
 	fmt.Printf("     avg resp time %v\n", time.Duration(avg(times)))
+	fmt.Printf("  requests per sec %v\n", float64(requests) / t.Seconds())
+
+
+	fmt.Println()
 
 }
 
@@ -98,7 +112,7 @@ func TestLoad(t *testing.T) {
 			{Path: "/tests/"},
 			{Path: "/v1/api/*"},
 		},
-		Strategy: "wrr",
+		Strategy: "rand",
 		Targets: []*lb.Target{
 			{
 				ID: "test-1",
@@ -110,10 +124,26 @@ func TestLoad(t *testing.T) {
 				URL: "http://localhost:3001",
 				Weight: 15,
 			},
+			{
+				ID: "test-3",
+				URL: "http://localhost:3002",
+				Weight: 20,
+			},
+			{
+				ID: "test-4",
+				URL: "http://localhost:3003",
+				Weight: 30,
+			},
+			{
+				ID: "test-5",
+				URL: "http://localhost:3003",
+				Weight: 40,
+			},
 		},
 	})
 
 	go l.Start()
 
-	load("/test", 20, 30 * time.Second)
+	time.Sleep(2 * time.Second)
+	load("/tests/", 2, time.Duration(0), 30 * time.Second)
 }
