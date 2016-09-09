@@ -14,7 +14,7 @@ func main()  {
 			{Path: "/tests/"},
 			{Path: "/v1/api/*"},
 		},
-		Strategy: "rrh",
+		Strategy: "wrr",
 		Targets: []*lb.Target{
 			{
 				ID: "test-1",
@@ -24,16 +24,6 @@ func main()  {
 			{
 				ID: "test-2",
 				URL: "http://localhost:3001",
-				Weight: 15,
-			},
-			{
-				ID: "test-3",
-				URL: "http://localhost:3002",
-				Weight: 15,
-			},
-			{
-				ID: "test-4",
-				URL: "http://localhost:3003",
 				Weight: 15,
 			},
 		},

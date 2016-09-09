@@ -5,87 +5,16 @@ import (
 	"github.com/coldog/proxy/lb/router"
 
 	"errors"
-	"hash/fnv"
-	"math/rand"
 	"net"
 	"time"
 	"github.com/coldog/proxy/lb/stats"
 )
-
-type Dispatcher func(h *Handler, c *ctx.Context) *Target
-
-var dispatchers = map[string]Dispatcher{
-	"rr":      RRDispatcher,
-	"rrh":     RRBalanceHealthDispatcher,
-	"rand":    RandDispatcher,
-	"ip_hash": IPHashDispatcher,
-}
-
-func RandDispatcher(h *Handler, c *ctx.Context) *Target {
-	pick := rand.Intn(len(h.Targets) - 1)
-	h.LastTarget = pick
-	return h.Targets[pick]
-}
-
-func RRDispatcher(h *Handler, c *ctx.Context) *Target {
-	this := h.LastTarget + 1
-	if this > len(h.Targets)-1 {
-		this = 0
-	}
-
-	h.LastTarget = this
-	return h.Targets[this]
-}
-
-func RRBalanceHealthDispatcher(h *Handler, c *ctx.Context) *Target {
-	this := h.LastTarget
-
-	for i := 0; i < len(h.Targets); i++ {
-		this += 1
-
-		if this > len(h.Targets)-1 {
-			this = 0
-		}
-
-		if h.Targets[this].lastFailure.IsZero() || h.Targets[this].lastFailure.Add(time.Duration(30 * time.Second)).Before(time.Now()) {
-			h.LastTarget = this
-			return h.Targets[this]
-		}
-
-	}
-
-	h.LastTarget = this
-	return h.Targets[this]
-}
-
-func IPHashDispatcher(handler *Handler, c *ctx.Context) *Target {
-	ip := c.ClientIp()
-
-	if ip == "" || ip == "unknown" {
-		return handler.Targets[rand.Intn(len(handler.Targets)-1)]
-	}
-
-	h := fnv.New64a()
-	h.Write([]byte(ip))
-	key := h.Sum64()
-
-	var b, j int64
-	for j < int64(len(handler.Targets)-1) {
-		b = j
-		key = key*2862933555777941757 + 1
-		j = int64(float64(b+1) * (float64(int64(1)<<31) / float64((key>>33)+1)))
-	}
-
-	handler.LastTarget = int(b)
-	return handler.Targets[int(b)]
-}
 
 type Handler struct {
 	Name                  string
 	Routes                []*router.Route
 	Strategy              string
 	Middleware            []string
-	LastTarget            int
 	Targets               []*Target
 	MaxConn               int
 	ShutdownWait          time.Duration
@@ -98,6 +27,9 @@ type Handler struct {
 	DisableCompression    bool
 	RawProxy              bool
 	ClientIPHeader        string
+
+	index         int
+	currentWeight int
 
 	quit      chan struct{}
 	closed    bool
@@ -190,9 +122,9 @@ func (h *Handler) Next(c *ctx.Context) *Target {
 		return nil
 	}
 
-	dispatcher, ok := dispatchers[h.Strategy]
+	dispatcher, ok := strategies[h.Strategy]
 	if !ok {
-		dispatcher = RRDispatcher
+		dispatcher = RRStrategy
 	}
 
 	h.stats.SetIncrement("requests." + h.Name, 1)

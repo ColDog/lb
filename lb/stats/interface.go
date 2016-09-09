@@ -5,6 +5,13 @@ import (
 	"sync"
 )
 
+type StatsCollectorBackend string
+
+const (
+	MEMORY StatsCollectorBackend = "memory"
+	NOOP StatsCollectorBackend = "noop"
+)
+
 type StatsCollector interface {
 	SetIncrement(key string, amount int)
 	SetTime(key string, t time.Time)
@@ -22,6 +29,21 @@ func (n *NoOpStatsCollector) GetIncrement(key string) int64 { return int64(0)}
 type point struct {
 	t time.Time
 	p float64
+}
+
+func New(t StatsCollectorBackend) StatsCollector {
+	if t == MEMORY {
+		return &InMemStatsCollector{
+			lockIncr: &sync.RWMutex{},
+			increments: map[string]int64{},
+			lockPts: &sync.Mutex{},
+			points: map[string][]point{},
+			lockTms: &sync.Mutex{},
+			timer: map[string][]time.Duration{},
+		}
+	} else {
+		return &NoOpStatsCollector{}
+	}
 }
 
 type InMemStatsCollector struct {

@@ -106,6 +106,18 @@ func (s *Server) clearHandler(name string) {
 	}
 }
 
+func (s *Server) UpdateTargetWeight(name, targetId string, weight int) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	if h, ok := s.handlers[name]; ok {
+		for _, t := range h.Targets {
+			if targetId == t.ID {
+				t.Weight = weight
+			}
+		}
+	}
+}
+
 func (s *Server) RemoveTarget(name, targetId string) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
