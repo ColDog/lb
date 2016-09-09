@@ -16,6 +16,7 @@ type Dispatcher func(h *Handler, c *ctx.Context) *Target
 
 var dispatchers = map[string]Dispatcher{
 	"rr":      RRDispatcher,
+	"rrh":     RRBalanceHealthDispatcher,
 	"rand":    RandDispatcher,
 	"ip_hash": IPHashDispatcher,
 }
@@ -30,6 +31,27 @@ func RRDispatcher(h *Handler, c *ctx.Context) *Target {
 	this := h.LastTarget + 1
 	if this > len(h.Targets)-1 {
 		this = 0
+	}
+
+	h.LastTarget = this
+	return h.Targets[this]
+}
+
+func RRBalanceHealthDispatcher(h *Handler, c *ctx.Context) *Target {
+	this := h.LastTarget
+
+	for i := 0; i < len(h.Targets); i++ {
+		this += 1
+
+		if this > len(h.Targets)-1 {
+			this = 0
+		}
+
+		if h.Targets[this].lastFailure.IsZero() || h.Targets[this].lastFailure.Add(time.Duration(30 * time.Second)).Before(time.Now()) {
+			h.LastTarget = this
+			return h.Targets[this]
+		}
+
 	}
 
 	h.LastTarget = this
@@ -65,7 +87,6 @@ type Handler struct {
 	Middleware            []string
 	LastTarget            int
 	Targets               []*Target
-	Unhealthy             []*Target
 	MaxConn               int
 	ShutdownWait          time.Duration
 	DialTimeout           time.Duration

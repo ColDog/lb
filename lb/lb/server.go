@@ -56,9 +56,6 @@ func (s *Server) PutHandler(handler *Handler) {
 	for _, t := range handler.Targets {
 		t.stats = s.Stats
 	}
-	for _, t := range handler.Unhealthy {
-		t.stats = s.Stats
-	}
 }
 
 func (s *Server) HasHandler(name string) bool {

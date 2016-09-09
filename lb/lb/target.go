@@ -19,8 +19,9 @@ type Target struct {
 	URL            string
 	Timeout        int
 	Weight         int
-	FailedRequests int
 
+	failedRequests int
+	lastFailure    time.Time
 	proxy          http.Handler
 	rawProxy       http.Handler
 	wsProxy        http.Handler
@@ -102,7 +103,8 @@ func (m *meteredRoundTripper) RoundTrip(r *http.Request) (*http.Response, error)
 	m.stat.SetTime(m.id, t1)
 	m.stat.SetIncrement(m.id + "." + statusCodeName(resp), 1)
 	if err != nil || resp.StatusCode >= 500 {
-		m.t.FailedRequests += 1
+		m.t.failedRequests += 1
+		m.t.lastFailure = time.Now()
 	}
 	return resp, err
 }

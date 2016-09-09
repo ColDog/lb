@@ -14,6 +14,7 @@ func main()  {
 			{Path: "/tests/"},
 			{Path: "/v1/api/*"},
 		},
+		Strategy: "rrh",
 		Targets: []*lb.Target{
 			{
 				ID: "test-1",
