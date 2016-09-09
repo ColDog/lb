@@ -22,6 +22,7 @@ type Target struct {
 
 	failedRequests int
 	lastFailure    time.Time
+	lastTime       int64
 	proxy          http.Handler
 	rawProxy       http.Handler
 	wsProxy        http.Handler
@@ -105,6 +106,7 @@ func (m *meteredRoundTripper) RoundTrip(r *http.Request) (*http.Response, error)
 	if err != nil || resp.StatusCode >= 500 {
 		m.t.failedRequests += 1
 		m.t.lastFailure = time.Now()
+		m.t.lastTime = time.Now().UnixNano() - t1.UnixNano()
 	}
 	return resp, err
 }
