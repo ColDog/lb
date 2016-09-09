@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"runtime"
 	"sync"
+	"time"
 )
 
 type Middleware func(c *ctx.Context)
@@ -19,7 +19,7 @@ func New(c *Config) *Server {
 	return &Server{
 		config:     c,
 		handlers:   map[string]*Handler{},
-		middleware: map[string]func(c *ctx.Context) {},
+		middleware: map[string]Middleware{},
 		router:     router.New(),
 		lock:       &sync.RWMutex{},
 		Stats:      &stats.NoOpStatsCollector{},
@@ -79,7 +79,19 @@ func (s *Server) AddTarget(name string, target *Target) {
 
 func (s *Server) RemoveHandler(name string) {
 	s.lock.Lock()
+	h, ok := s.handlers[name]
+	s.lock.Unlock()
+
+	if !ok {
+		return
+	}
+
+	h.draining = true
+	time.Sleep(h.ShutdownWait)
+
+	s.lock.Lock()
 	defer s.lock.Unlock()
+
 	s.clearHandler(name)
 	s.router.Remove(name)
 }
@@ -145,7 +157,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := s.router.Match(r)
 	handler := s.handler(key)
 
-	c := ctx.NewCtx(w, r)
+	c := ctx.New(w, r)
 
 	if handler == nil {
 		c.NoneAvailable()
@@ -178,25 +190,4 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	backend.Proxy(handler, r).ServeHTTP(w, r)
-}
-
-func Stats() map[string]interface{} {
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-
-	return map[string]interface{}{
-		"name": "sked",
-		"go":   runtime.Version(),
-		"runtime": map[string]interface{}{
-			"goroutines":    runtime.NumGoroutine(),
-			"alloc":         mem.Alloc,
-			"total_alloc":   mem.TotalAlloc,
-			"heap_alloc":    mem.HeapAlloc,
-			"heap_sys":      mem.HeapSys,
-			"heap_released": mem.HeapReleased,
-			"heap_objects":  mem.HeapObjects,
-			"cgo_calls":     runtime.NumCgoCall(),
-			"num_cpu":       runtime.NumCPU(),
-		},
-	}
 }

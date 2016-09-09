@@ -66,7 +66,6 @@ type Handler struct {
 	LastTarget            int
 	Targets               []*Target
 	Unhealthy             []*Target
-	NoRouteStatus         int
 	MaxConn               int
 	ShutdownWait          time.Duration
 	DialTimeout           time.Duration
@@ -78,7 +77,6 @@ type Handler struct {
 	DisableCompression    bool
 	RawProxy              bool
 	ClientIPHeader        string
-	HealthInterval        time.Duration
 
 	quit      chan struct{}
 	closed    bool

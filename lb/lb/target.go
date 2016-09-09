@@ -19,8 +19,7 @@ type Target struct {
 	URL            string
 	Timeout        int
 	Weight         int
-	HealthCheckPath string
-	HealthTimeout  time.Duration
+	FailedRequests int
 
 	proxy          http.Handler
 	rawProxy       http.Handler
@@ -69,17 +68,22 @@ func (b *Target) Proxy(h *Handler, r *http.Request) http.Handler {
 			return b.wsProxy
 		} else {
 			if b.proxy == nil {
-				b.proxy = newHTTPProxyWithTripper(h.Name+"."+b.ID, b.url, b.tr, time.Duration(0))
+				b.proxy = newHTTPProxyWithTripper(b, time.Duration(0))
 			}
 			return b.proxy
 		}
 	}
 }
 
-func newHTTPProxyWithTripper(id string, t *url.URL, tr *http.Transport, flush time.Duration) http.Handler {
-	rp := httputil.NewSingleHostReverseProxy(t)
+func newHTTPProxyWithTripper(t *Target, flush time.Duration) http.Handler {
+	rp := httputil.NewSingleHostReverseProxy(t.url)
 	rp.FlushInterval = flush
-	rp.Transport = &meteredRoundTripper{id, tr}
+	rp.Transport = &meteredRoundTripper{
+		id: t.ID,
+		tr: t.tr,
+		stat: t.stats,
+		t: t,
+	}
 	return rp
 }
 
@@ -87,13 +91,19 @@ type meteredRoundTripper struct {
 	id string
 	tr http.RoundTripper
 	stat stats.StatsCollector
+	t *Target
 }
 
 func (m *meteredRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	t1 := time.Now()
 	resp, err := m.tr.RoundTrip(r)
+
+
 	m.stat.SetTime(m.id, t1)
-	m.stat.SetIncrement(m.id + "." + statusCodeName(resp.StatusCode), 1)
+	m.stat.SetIncrement(m.id + "." + statusCodeName(resp), 1)
+	if err != nil || resp.StatusCode >= 500 {
+		m.t.FailedRequests += 1
+	}
 	return resp, err
 }
 
@@ -172,7 +182,13 @@ func newWSProxy(t *url.URL) http.Handler {
 	})
 }
 
-func statusCodeName(code int) string {
+func statusCodeName(r *http.Response) string {
+	if r == nil {
+		return "5xx"
+	}
+
+	code := r.StatusCode
+
 	if code >= 500 {
 		return "5xx"
 	} else if code < 500 && code >= 400 {

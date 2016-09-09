@@ -5,16 +5,16 @@ import (
 	"net/http"
 )
 
-func NewCtx(w http.ResponseWriter, r *http.Request) *Context {
+func New(w http.ResponseWriter, r *http.Request) *Context {
 	return &Context{
 		Writer: w,
 		Req:    r,
+		Quit:   make(chan struct{}),
 	}
 }
 
 type Context struct {
 	Finished bool
-	Written  bool
 	Writer   http.ResponseWriter
 	Req      *http.Request
 	Quit     chan struct{}
@@ -48,14 +48,13 @@ func (ctx *Context) Finish() {
 func (ctx *Context) WithStatus(status int) {
 	result := fmt.Sprintf(`{"error": true, "code": %d, "message": "%s"}`, status, http.StatusText(status))
 	ctx.Writer.WriteHeader(status)
-	ctx.Write(result)
 	ctx.AsJson()
-	ctx.Finish()
+	ctx.Write(result)
 }
 
 func (ctx *Context) Write(body string) {
-	ctx.Written = true
 	ctx.Writer.Write([]byte(body))
+	ctx.Finish()
 }
 
 func (ctx *Context) SetHeader(key, value string) {

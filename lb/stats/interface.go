@@ -9,10 +9,7 @@ type StatsCollector interface {
 	SetIncrement(key string, amount int)
 	SetTime(key string, t time.Time)
 	SetPoint(key string, value float64)
-
 	GetIncrement(key string) int64
-	GetTime(key string) time.Duration
-	GetPoint(key string) (time.Time, float64)
 }
 
 type NoOpStatsCollector struct {}

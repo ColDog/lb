@@ -12,9 +12,8 @@ func main()  {
 		Name: "test",
 		Routes: []*router.Route{
 			{Path: "/tests/"},
+			{Path: "/v1/api/*"},
 		},
-		RawProxy: true,
-		Strategy: "ip_hash",
 		Targets: []*lb.Target{
 			{
 				ID: "test-1",

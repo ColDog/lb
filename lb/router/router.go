@@ -8,11 +8,12 @@ import (
 type Route struct {
 	Path     string
 	Host     string
+	Headers  map[string]string
 	Priority int
 	key      string
 	pathRegx *regexp.Regexp
 	hostRegx *regexp.Regexp
-	headRegx *regexp.Regexp
+	headRegx map[string]*regexp.Regexp
 }
 
 func New() *Router {
@@ -48,6 +49,18 @@ func (r *Router) Add(key string, route *Route) (err error) {
 		}
 	}
 
+	if len(route.Headers) > 0 {
+		route.headRegx = make(map[string]*regexp.Regexp, len(route.Headers))
+
+		for key, match := range route.Headers {
+			reg, err := regexp.Compile(match)
+			if err != nil {
+				return err
+			}
+			route.headRegx[key] = reg
+		}
+	}
+
 	if len(r.routes) > 0 {
 		if route.Priority >= r.routes[0].Priority {
 			r.routes = append([]*Route{route}, r.routes...)
@@ -76,6 +89,16 @@ func (r *Router) Match(req *http.Request) string {
 
 		if route.hostRegx != nil && route.hostRegx.MatchString(req.Host) {
 			return route.key
+		}
+
+		if route.headRegx != nil {
+			for header, match := range route.headRegx {
+				val := req.Header.Get(header)
+				if val != "" && match.MatchString(val) {
+					return route.key
+				}
+
+			}
 		}
 	}
 	return ""
